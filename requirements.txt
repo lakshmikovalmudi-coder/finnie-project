@@ -17,6 +17,7 @@ streamlit>=1.41.0
 pandas>=2.2.3
 numpy>=1.26.4
 requests>=2.32.3
+beautifulsoup4>=4.12   # scripts/scrape_kb.py (knowledge-base scraper)
 
 # --- Config & validation ---
 python-dotenv>=1.0.1
