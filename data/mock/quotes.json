@@ -1,0 +1,13 @@
+{
+  "AAPL": {"price": 227.50, "open": 225.10, "high": 228.40, "low": 224.80, "volume": 48211000, "previous_close": 225.00, "change": 2.50, "change_percent": 1.11, "latest_trading_day": "MOCK"},
+  "MSFT": {"price": 416.30, "open": 414.00, "high": 418.20, "low": 412.70, "volume": 19870000, "previous_close": 413.90, "change": 2.40, "change_percent": 0.58, "latest_trading_day": "MOCK"},
+  "GOOGL": {"price": 165.80, "open": 166.50, "high": 167.10, "low": 164.90, "volume": 22130000, "previous_close": 166.70, "change": -0.90, "change_percent": -0.54, "latest_trading_day": "MOCK"},
+  "AMZN": {"price": 186.40, "open": 185.20, "high": 187.60, "low": 184.30, "volume": 35420000, "previous_close": 185.00, "change": 1.40, "change_percent": 0.76, "latest_trading_day": "MOCK"},
+  "NVDA": {"price": 121.40, "open": 123.00, "high": 124.10, "low": 120.20, "volume": 251300000, "previous_close": 123.50, "change": -2.10, "change_percent": -1.70, "latest_trading_day": "MOCK"},
+  "TSLA": {"price": 250.10, "open": 246.00, "high": 252.80, "low": 244.50, "volume": 86500000, "previous_close": 245.30, "change": 4.80, "change_percent": 1.96, "latest_trading_day": "MOCK"},
+  "SPY": {"price": 571.20, "open": 569.80, "high": 572.40, "low": 568.10, "volume": 41200000, "previous_close": 569.50, "change": 1.70, "change_percent": 0.30, "latest_trading_day": "MOCK"},
+  "VTI": {"price": 284.60, "open": 283.90, "high": 285.20, "low": 283.10, "volume": 3120000, "previous_close": 283.80, "change": 0.80, "change_percent": 0.28, "latest_trading_day": "MOCK"},
+  "VXUS": {"price": 64.30, "open": 64.10, "high": 64.50, "low": 63.90, "volume": 3540000, "previous_close": 64.00, "change": 0.30, "change_percent": 0.47, "latest_trading_day": "MOCK"},
+  "BND": {"price": 74.90, "open": 74.80, "high": 75.00, "low": 74.70, "volume": 5610000, "previous_close": 74.85, "change": 0.05, "change_percent": 0.07, "latest_trading_day": "MOCK"},
+  "QQQ": {"price": 487.30, "open": 485.00, "high": 489.10, "low": 484.20, "volume": 30150000, "previous_close": 485.60, "change": 1.70, "change_percent": 0.35, "latest_trading_day": "MOCK"}
+}

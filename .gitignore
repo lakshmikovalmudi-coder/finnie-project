@@ -1,0 +1,25 @@
+# Secrets — never commit (course rule: no API keys / .env in submission)
+.env
+.env.*
+!.env.example
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Runtime artifacts
+data/cache/*
+!data/cache/.gitkeep
+data/faiss_index/
+
+# Course material (not ours to publish in a public repo)
+Capstone Notes.pdf
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

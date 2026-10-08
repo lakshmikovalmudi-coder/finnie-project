@@ -1,0 +1,7 @@
+[
+  {"title": "[MOCK] Fed holds rates steady, signals patience on future cuts", "url": "https://example.com/mock/fed-rates", "snippet": "Mock article used when the news API is unavailable. Policymakers kept the benchmark rate unchanged.", "published": "MOCK"},
+  {"title": "[MOCK] Broad index funds see record inflows from retail investors", "url": "https://example.com/mock/index-inflows", "snippet": "Mock article. Low-cost index ETFs continue to attract first-time investors.", "published": "MOCK"},
+  {"title": "[MOCK] Tech earnings beat expectations, but guidance is cautious", "url": "https://example.com/mock/tech-earnings", "snippet": "Mock article. Several large-cap tech firms reported higher revenue.", "published": "MOCK"},
+  {"title": "[MOCK] Treasury yields edge lower as inflation cools", "url": "https://example.com/mock/treasury-yields", "snippet": "Mock article. Bond prices rose as the 10-year yield declined.", "published": "MOCK"},
+  {"title": "[MOCK] IRS announces new 401(k) and IRA contribution limits", "url": "https://example.com/mock/contribution-limits", "snippet": "Mock article. Annual contribution limits were adjusted for inflation.", "published": "MOCK"}
+]

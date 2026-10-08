@@ -1,0 +1,6 @@
+symbol,shares,asset_class
+AAPL,40,equity
+NVDA,60,equity
+TSLA,15,equity
+VTI,20,equity
+BND,30,bond
