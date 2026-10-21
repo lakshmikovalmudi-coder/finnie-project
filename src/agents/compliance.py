@@ -2,6 +2,8 @@
 
 import re
 
+from langchain_core.messages import AIMessage
+
 from src.state import FinnieState
 
 DISCLAIMER = (
@@ -28,6 +30,8 @@ def soften(text: str) -> str:
 
 async def run(state: FinnieState) -> dict:
     answer = soften(state.get("answer", "")).rstrip()
+    # History keeps the answer without the disclaimer: it adds tokens, not context.
+    history = AIMessage(content=answer.replace(DISCLAIMER, "").rstrip())
     if DISCLAIMER not in answer:
         answer = f"{answer}\n\n---\n{DISCLAIMER}"
-    return {"answer": answer}
+    return {"answer": answer, "messages": [history]}

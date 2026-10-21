@@ -36,17 +36,21 @@ Source of truth for scope: `Capstone Notes.pdf` → *Project 1 — Finnie*.
 
 Flow for every user turn:
 
-1. **Router** classifies the query into exactly one route (structured LLM output,
-   with a keyword fallback if the LLM call fails).
+1. **Router** reads the recent conversation, classifies the latest message into
+   exactly one route (structured LLM output, with a keyword fallback if the LLM
+   call fails) and rewrites a follow-up into a standalone `query`.
 2. The graph dispatches to one **specialist agent** node.
 3. The specialist calls its **tools** (RAG, market data, news, math) and drafts
    an answer grounded in tool output.
 4. The **compliance** node appends the education-not-advice disclaimer and
-   records sources.
+   adds the answer to `messages`.
 5. The final state is returned to the UI.
 
 Graph wiring lives in `src/graph.py`. Shared state is `FinnieState` in
-`src/state.py`.
+`src/state.py`. The graph is compiled with an in-memory checkpointer: calls to
+`run_query(..., thread_id=...)` with the same id share `messages`, which is how
+follow-up questions keep their context (one thread per Streamlit session or MCP
+`conversation_id`).
 
 ---
 
@@ -56,7 +60,7 @@ Graph wiring lives in `src/graph.py`. Shared state is `FinnieState` in
 |------|------|----------------|-------|-----------|
 | **Router** | `src/agents/router.py` | Classify query → one of `finance_qa`, `portfolio`, `market`, `goals`, `news`, `tax`. Returns route + confidence. | LLM (structured output) | Answer the question itself |
 | **Finance Q&A** | `src/agents/finance_qa.py` | Explain concepts (compound interest, ETFs vs mutual funds, diversification). Default route when unsure. | RAG retriever | Recommend specific securities |
-| **Portfolio Analysis** | `src/agents/portfolio.py` | Analyze uploaded holdings: allocation, concentration, diversification and risk flags. | `portfolio_math`, `market_data` | Tell the user to buy/sell |
+| **Portfolio Analysis** | `src/agents/portfolio.py` | Analyze uploaded holdings: allocation, concentration (HHI), volatility, max drawdown, risk flags and educational considerations. | `portfolio_math`, `market_data` | Tell the user to buy/sell |
 | **Market Analysis** | `src/agents/market.py` | Pull live quotes and explain what the numbers mean (P/E, % change, volume). | `market_data` (cached Alpha Vantage) | Predict prices |
 | **Goal Planning** | `src/agents/goals.py` | Compute monthly savings needed to hit a target; show assumptions. | `goal_math` (deterministic) | Let the LLM do arithmetic |
 | **News Synthesizer** | `src/agents/news.py` | Summarize current financial news **with source links**. | `news_search` (Tavily / SerpApi, cached) | Summarize without citing sources |
@@ -83,8 +87,8 @@ Graph wiring lives in `src/graph.py`. Shared state is `FinnieState` in
 
 | Key | Type | Set by |
 |-----|------|--------|
-| `messages` | `list[BaseMessage]` (add_messages reducer) | UI / agents |
-| `query` | `str` | UI |
+| `messages` | `list[BaseMessage]` (add_messages reducer; persisted per thread) | UI (question) / Compliance (answer) |
+| `query` | `str` | UI; Router replaces a follow-up with its standalone rewrite |
 | `route` | `Route` literal | Router |
 | `route_confidence` | `float` | Router |
 | `portfolio` | `list[dict] \| None` | UI (Portfolio tab upload) |
@@ -120,7 +124,9 @@ state in place.
 - Use structured output (Pydantic) for anything the code branches on (routing).
 - **Numbers come from Python, not the LLM.** Goal math, portfolio weights, and
   returns are computed deterministically; the LLM only explains them.
-- Ground answers in tool/RAG output. If retrieval returns nothing, say so.
+- Ground answers in tool/RAG output. Retrieval hits below `RAG_MIN_SCORE` are
+  dropped (`retriever.relevant`); with none left, `answer_from_knowledge_base`
+  labels the answer as unsourced and it carries no citations.
 
 **External APIs**
 - Every external call goes through `src/tools/cache.py` (`@ttl_cache`).
@@ -138,7 +144,8 @@ state in place.
 **Style & quality**
 - Type hints on all public functions; Pydantic v2 for structured data.
 - `ruff check . && ruff format .` before committing.
-- `pytest` for tools (math, cache, fallbacks) and router keyword fallback.
+- `pytest` (offline: fake LLM + mock data) for tools, agents end to end,
+  memory, MCP tools and Streamlit tabs; `pytest -m live -s` against real APIs.
 - Docstrings: one line stating *what* and *why*, not *how*.
 - Logging via `logging.getLogger(__name__)`; no `print` in `src/`.
 

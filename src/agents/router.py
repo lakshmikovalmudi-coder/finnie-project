@@ -1,4 +1,5 @@
-"""Router: classify the user query into exactly one specialist route."""
+"""Router: classify the latest user message into one specialist route, using the
+conversation so follow-ups ("what about Roth?") are rewritten to stand alone."""
 
 import logging
 import re
@@ -22,7 +23,15 @@ Classify the user's finance question into exactly one route:
 
 If the question names a tax-advantaged account (401(k), IRA, Roth, HSA) or a tax
 topic, choose tax, even for "what is" or "what's the difference" questions.
+
+Earlier messages are conversation context. Classify the LAST user message. Also
+return standalone_query: that message rewritten so it makes sense on its own,
+filling in what a follow-up refers to (e.g. after a question about Roth IRAs,
+"what about the limits?" -> "What are the Roth IRA contribution limits?").
+If it already stands alone, return it unchanged.
 """
+
+HISTORY_MESSAGES = 6  # the last three exchanges are enough to resolve a follow-up
 
 # Checked in order; first match wins. Used when the LLM is unavailable.
 KEYWORD_ROUTES: list[tuple[Route, re.Pattern[str]]] = [
@@ -37,6 +46,7 @@ KEYWORD_ROUTES: list[tuple[Route, re.Pattern[str]]] = [
 class RouteDecision(BaseModel):
     route: Route
     confidence: float = Field(ge=0.0, le=1.0)
+    standalone_query: str = Field("", description="Last user message, rewritten to stand alone")
 
 
 def keyword_route(query: str) -> Route:
@@ -48,16 +58,20 @@ def keyword_route(query: str) -> Route:
 
 async def run(state: FinnieState) -> dict:
     query = state["query"]
+    conversation = state.get("messages", [])[-HISTORY_MESSAGES:] or [("human", query)]
     try:
         classifier = get_llm(temperature=0).with_structured_output(RouteDecision)
         decision: RouteDecision = await classifier.ainvoke(
-            [("system", SYSTEM_PROMPT), ("human", query)]
+            [("system", SYSTEM_PROMPT), *conversation]
         )
         route, confidence = decision.route, decision.confidence
+        if len(conversation) > 1:  # only a follow-up needs rewriting; keep first questions verbatim
+            query = decision.standalone_query.strip() or query
     except Exception as exc:  # LLM down / no key: degrade, don't crash
         logger.warning("Router LLM failed, using keyword fallback: %s", exc)
         route, confidence = keyword_route(query), 0.0
 
     if route not in ROUTES or (0 < confidence < settings.router_min_confidence):
         route = "finance_qa"
-    return {"route": route, "route_confidence": confidence}
+    # Specialists read `query`, so they answer the rewritten, self-contained question.
+    return {"route": route, "route_confidence": confidence, "query": query}

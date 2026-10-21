@@ -1,5 +1,7 @@
 """Chat tab: one conversation routed through the LangGraph multi-agent graph."""
 
+from uuid import uuid4
+
 import streamlit as st
 
 from src.aio import run_sync
@@ -28,6 +30,8 @@ def _show(msg: dict) -> None:
     with st.chat_message(msg["role"]):
         if msg.get("route"):
             st.caption(f"Answered by {ROUTE_LABELS.get(msg['route'], msg['route'])}")
+        if msg.get("understood_as"):
+            st.caption(f"Follow-up understood as: *{msg['understood_as']}*")
         st.markdown(msg["content"])
         if msg.get("sources"):
             with st.expander("Sources"):
@@ -37,6 +41,13 @@ def _show(msg: dict) -> None:
 
 def render() -> None:
     history: list[dict] = st.session_state.setdefault("chat_history", [])
+    # The graph remembers the conversation per thread_id; the UI list is only for display.
+    thread_id: str = st.session_state.setdefault("thread_id", uuid4().hex)
+
+    if history and st.button("🧹 New conversation"):
+        st.session_state["chat_history"] = []
+        st.session_state["thread_id"] = uuid4().hex
+        st.rerun()
 
     if not history:
         st.markdown("**Try asking:**")
@@ -57,13 +68,15 @@ def render() -> None:
     history.append({"role": "user", "content": query})
     _show(history[-1])
     with st.spinner("Thinking…"):
-        result = run_sync(run_query(query, st.session_state.get("portfolio_rows")))
+        result = run_sync(run_query(query, st.session_state.get("portfolio_rows"), thread_id))
+    rewritten = result.get("query", query)
     history.append(
         {
             "role": "assistant",
             "content": result.get("answer", ""),
             "route": result.get("route"),
             "sources": result.get("sources", []),
+            "understood_as": rewritten if rewritten.strip() != query.strip() else None,
         }
     )
     _show(history[-1])

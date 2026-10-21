@@ -1,10 +1,13 @@
-"""LangGraph wiring: router → one specialist → compliance → END."""
+"""LangGraph wiring: router → one specialist → compliance → END, with per-thread memory."""
 
 import functools
 import logging
 from collections.abc import Awaitable, Callable
+from uuid import uuid4
 
 from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from src.agents import compliance, finance_qa, goals, market, news, portfolio, router, tax
@@ -41,7 +44,7 @@ def _safe(name: str, node: Node) -> Node:
     return wrapper
 
 
-def build_graph():
+def build_graph(checkpointer: BaseCheckpointSaver | None = None):
     graph = StateGraph(FinnieState)
     graph.add_node("router", router.run)
     for name, node in AGENT_NODES.items():
@@ -52,16 +55,21 @@ def build_graph():
     graph.add_edge(START, "router")
     graph.add_conditional_edges("router", lambda s: s["route"], {r: r for r in AGENT_NODES})
     graph.add_edge("compliance", END)
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
 
 
 @functools.lru_cache(maxsize=1)
 def get_graph():
-    return build_graph()
+    # The checkpointer keeps each thread's messages between turns, in process memory.
+    return build_graph(checkpointer=InMemorySaver())
 
 
-async def run_query(query: str, portfolio_rows: list[dict] | None = None) -> FinnieState:
-    """Entry point for the UI: run one user turn through the graph."""
+async def run_query(
+    query: str, portfolio_rows: list[dict] | None = None, thread_id: str | None = None
+) -> FinnieState:
+    """Run one user turn. Turns that share a thread_id share conversation history;
+    without one, the turn starts a fresh conversation."""
+    config = {"configurable": {"thread_id": thread_id or uuid4().hex}}
     return await get_graph().ainvoke(
         {
             "query": query,
@@ -70,5 +78,6 @@ async def run_query(query: str, portfolio_rows: list[dict] | None = None) -> Fin
             "sources": [],
             "data": {},
             "error": None,
-        }
+        },
+        config,
     )

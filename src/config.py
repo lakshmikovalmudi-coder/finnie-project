@@ -31,6 +31,8 @@ class Settings:
 
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     rag_top_k: int = int(os.getenv("RAG_TOP_K", "4"))
+    # Cosine score below which a chunk is treated as off-topic (on-topic hits measured ≥ 0.5).
+    rag_min_score: float = float(os.getenv("RAG_MIN_SCORE", "0.45"))
     router_min_confidence: float = float(os.getenv("ROUTER_MIN_CONFIDENCE", "0.5"))
 
     cache_dir: Path = DATA_DIR / "cache"

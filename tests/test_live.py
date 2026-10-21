@@ -2,8 +2,9 @@
 
 Skipped by default (they cost quota). Run with:  pytest -m live -s
 `-s` prints each query, route, and answer so a human can judge answer quality.
-Budget per run: ~20 gpt-4o-mini calls, up to 5 Alpha Vantage calls (AAPL, NVDA,
-MSFT, TSLA, SPY; cached 30 min), ~2 news calls.
+Budget per run: ~25 gpt-4o-mini calls, up to 7 Alpha Vantage calls (quotes for AAPL,
+NVDA, MSFT, TSLA, SPY cached 30 min; daily history for AAPL, NVDA cached 12 h),
+~2 news calls.
 """
 
 import re
@@ -12,6 +13,7 @@ import pandas as pd
 import pytest
 
 from src.agents import market
+from src.agents.base import NO_SOURCE_NOTE
 from src.agents.compliance import ADVICE_PATTERNS, DISCLAIMER
 from src.aio import run_sync
 from src.config import DATA_DIR, settings
@@ -35,9 +37,11 @@ needs_news = pytest.mark.skipif(
 )
 
 
-def ask(query: str, portfolio: list[dict] | None = None) -> dict:
-    state = run_sync(run_query(query, portfolio))
+def ask(query: str, portfolio: list[dict] | None = None, thread_id: str | None = None) -> dict:
+    state = run_sync(run_query(query, portfolio, thread_id))
     print(f"\n=== {query}\nroute={state['route']} ({state['route_confidence']:.2f})")
+    if state["query"] != query:
+        print(f"understood as: {state['query']}")
     print(f"sources={state['sources']}\n{state['answer']}")
     assert state["error"] is None, state["error"]
     assert DISCLAIMER in state["answer"]
@@ -67,6 +71,19 @@ def test_finance_qa_cites_knowledge_base():
     state = ask("Explain diversification simply")
     assert state["sources"]
     assert re.search(r"\[\d\]", state["answer"]), "answer doesn't cite context blocks"
+
+
+def test_follow_up_is_rewritten_from_conversation():
+    ask("What is a Roth IRA?", thread_id="live-follow-up")
+    state = ask("And how is it different from a traditional one?", thread_id="live-follow-up")
+    assert state["route"] == "tax"
+    assert re.search(r"roth", state["query"], re.I), "follow-up wasn't resolved from history"
+
+
+def test_off_topic_question_is_labelled_unsourced():
+    state = ask("What's a good recipe for banana bread?")
+    assert state["answer"].startswith(NO_SOURCE_NOTE)
+    assert state["sources"] == []
 
 
 def test_goals_answer_quotes_python_numbers():
@@ -100,6 +117,7 @@ def test_portfolio_prices_live():
     analysis = state["data"]["portfolio"]
     assert analysis["unpriced"] == []
     assert analysis["total_value"] > 0
+    assert analysis["risk"]["sample_data"] is False, "price history fell back to mock"
 
 
 @live_data

@@ -36,6 +36,12 @@ async def asearch(query: str, k: int | None = None) -> list[dict]:
     return await asyncio.to_thread(search, query, k)
 
 
+def relevant(hits: list[dict], min_score: float | None = None) -> list[dict]:
+    """Drop weak matches, so an off-topic chunk never poses as a source."""
+    threshold = settings.rag_min_score if min_score is None else min_score
+    return [h for h in hits if h["score"] >= threshold]
+
+
 def format_context(hits: list[dict]) -> str:
     """Render hits as numbered context blocks for the LLM prompt."""
     return "\n\n".join(f"[{n}] {h['title']}\n{h['text']}" for n, h in enumerate(hits, 1))

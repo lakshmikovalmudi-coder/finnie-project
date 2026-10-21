@@ -12,9 +12,10 @@ import json
 
 import pandas as pd
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from src.agents import base, goals, router
+from src.agents.base import NO_SOURCE_NOTE
 from src.agents.compliance import DISCLAIMER
 from src.agents.goals import GoalParams
 from src.agents.router import RouteDecision, keyword_route
@@ -37,6 +38,8 @@ class FakeLLM:
     def __init__(self, goal_params: GoalParams, fail: bool = False):
         self.goal_params = goal_params
         self.fail = fail
+        self.standalone_query = ""  # what the router "rewrites" a follow-up to
+        self.router_calls: list[list] = []
 
     async def ainvoke(self, messages):
         if self.fail:
@@ -51,7 +54,13 @@ class FakeLLM:
                 if llm.fail:
                     raise RuntimeError("LLM unavailable")
                 if schema is RouteDecision:
-                    return RouteDecision(route=keyword_route(_text(messages[-1])), confidence=0.9)
+                    llm.router_calls.append(messages)
+                    query = llm.standalone_query or _text(messages[-1])
+                    return RouteDecision(
+                        route=keyword_route(query),
+                        confidence=0.9,
+                        standalone_query=llm.standalone_query,
+                    )
                 if schema is GoalParams:
                     return llm.goal_params
                 raise AssertionError(f"Unexpected structured schema {schema}")
@@ -72,8 +81,8 @@ def fake_llm(monkeypatch):
     return llm
 
 
-def ask(query: str, portfolio: list[dict] | None = None) -> dict:
-    state = run_sync(run_query(query, portfolio))
+def ask(query: str, portfolio: list[dict] | None = None, thread_id: str | None = None) -> dict:
+    state = run_sync(run_query(query, portfolio, thread_id))
     assert state["error"] is None, state["error"]
     assert DISCLAIMER in state["answer"]
     return state
@@ -91,6 +100,41 @@ def test_rag_routes_answer_from_knowledge_base(fake_llm, query, route):
     assert state["route"] == route
     assert state["sources"], "RAG returned no sources"
     assert "[1]" in state["answer"]  # retrieved context reached the LLM prompt
+
+
+def test_off_topic_question_is_labelled_unsourced(fake_llm):
+    state = ask("What is the best pizza topping?")
+    assert state["route"] == "finance_qa"
+    assert state["answer"].startswith(NO_SOURCE_NOTE)
+    assert state["sources"] == []
+    assert state["data"]["grounded"] is False
+
+
+def test_follow_up_sees_earlier_turns_in_same_thread(fake_llm):
+    ask("What is a Roth IRA?", thread_id="t-memory")
+    fake_llm.standalone_query = "What are the Roth IRA contribution limits?"
+    state = ask("What about the limits?", thread_id="t-memory")
+
+    conversation = fake_llm.router_calls[-1][1:]  # drop the system prompt
+    assert [type(m) for m in conversation] == [HumanMessage, AIMessage, HumanMessage]
+    assert conversation[0].content == "What is a Roth IRA?"
+    assert DISCLAIMER not in conversation[1].content  # history stores the bare answer
+    # Specialists answer the rewritten question, so retrieval finds Roth limits.
+    assert state["query"] == "What are the Roth IRA contribution limits?"
+    assert state["route"] == "tax"
+
+
+def test_first_question_is_never_rewritten(fake_llm):
+    fake_llm.standalone_query = "Something the user didn't ask"
+    state = ask("What is compound interest?", thread_id="t-first")
+    assert state["query"] == "What is compound interest?"
+
+
+def test_threads_do_not_share_history(fake_llm):
+    ask("What is a Roth IRA?", thread_id="t-a")
+    ask("What is compound interest?", thread_id="t-b")
+    conversation = fake_llm.router_calls[-1][1:]
+    assert [m.content for m in conversation] == ["What is compound interest?"]
 
 
 def test_market_route_uses_mock_quotes(fake_llm):
@@ -129,8 +173,13 @@ def test_portfolio_route_analyzes_uploaded_holdings(fake_llm):
     assert state["route"] == "portfolio"
     assert analysis["unpriced"] == []
     assert analysis["total_value"] > 0
-    assert analysis["flags"]  # sample is all-equity and concentrated
+    assert analysis["flags"]  # sample is concentrated in single stocks
+    assert analysis["considerations"]
     assert json.dumps(analysis["total_value"]) in state["answer"]
+    risk = analysis["risk"]
+    assert risk["sample_data"] is True
+    assert set(risk["holding_volatility"]) == {h["symbol"] for h in analysis["holdings"]}
+    assert '"growth_of_100"' not in state["answer"]  # chart series kept out of the prompt
 
 
 def test_portfolio_route_without_upload_prompts_for_csv(fake_llm):
